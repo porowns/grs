@@ -3,6 +3,7 @@ Tool for syncing local changed and deleted Git files with a remote development s
 
 GRS is a wrapper for secure copy (`scp`) and remove (`rm`). This tool was created to resolve difficulties while developing on a local machine for z/OS applications.
 
+
 # Installation
 1. Clone the repository `git clone https://github.com/porowns/grs.git`
 2. [Optional] Create a local bin (`mkdir ~/bin/`)
@@ -13,3 +14,5 @@ GRS is a wrapper for secure copy (`scp`) and remove (`rm`). This tool was create
 `grs {remote user} {remote} {remote directory}`
 
 e.g `grs porowns testserver.com /home/porowns/project/`
+
+Upon executing this command, `grs` will sync modified files ('M', 'D') with on the remote `testserver.com` in directory `/home/porowns/project`. 
