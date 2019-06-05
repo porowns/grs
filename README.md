@@ -1,11 +1,9 @@
-# GRS
-Git remote sync tool.
+# Git Remote Sync (GRS)
+Tool for syncing local changed and deleted Git files with a remote development server. 
 
-GRS is a wrapper for secure copy (SCP) to upload changed files to a remote server. 
-
-This was created due to difficulties with working with Git on z/OS, and dealing with many FTP solutions to upload my code to avoid codepage issues. 
+GRS is a wrapper for secure copy (`scp`) and remove (`rm`). This tool was created to resolve difficulties while developing on a local machine for z/OS applications.
 
 # Usage
-`grs {files} {remote}`
+`grs {remote user} {remote} {remote directory}`
 
-e.g `grs * remote.system.com:~/home/porowns/repository/`
+e.g `grs porowns testserver.com /home/porowns/project/`
