@@ -1,99 +1,131 @@
-#!/bin/bash
-declare GIT_OUTPUT=($(git --no-pager diff --name-status))
+#!/usr/bin/env python3
+import argparse
+import subprocess
+import os
 
-POSITIONAL=()
-while [[ $# -gt 0 ]]
-do
-key="$1"
+parser = argparse.ArgumentParser(description="Load settings for GRS program")
 
-case $key in
-    -u|--user)
-    USER="$2"
-    shift # past argument
-    shift # past value
-    ;;
-    -h|--host)
-    HOST="$2"
-    shift # past argument
-    shift # past value
-    ;;
-    -r|--remote)
-    REMOTE_DIRECTORY="$2"
-    shift # past argument
-    shift # past value
-    ;;
-    -z|--zos)
-    ZOS="$2"
-    shift # past argument
-    shift # past value
-    ;;
-    -i|--init)
-    INIT="$2"
-    shift # past argument
-    shift # past value
-    ;;
-    *)    # unknown option
-    POSITIONAL+=("$1") # save it in an array for later
-    shift # past argument
-    ;;
-esac
-done
-set -- "${POSITIONAL[@]}" # restore positional parameters
+parser.add_argument('-u', '--user',
+                    action="store",
+                    dest="user",
+                    help="user to remote host",
+                    required=True)
 
-# TEST REMOTE DIRECTORIES
-if ssh $USER@$HOST "[ ! -d $REMOTE_DIRECTORY ]"
-then
-    echo "** Remote directory does not exist: $REMOTE_DIRECTORY"
-    exit 1
-fi
+parser.add_argument('-ip', '--host',
+                    action="store",
+                    dest="host",
+                    help="hostname to remote host",
+                    required=True)
 
-if ssh $USER@$HOST "[ ! -d $REMOTE_DIRECTORY/.git/ ]"
-then
-    echo "** Remote directory is not a git directory: $REMOTE_DIRECTORY"
-    exit 1
-fi
+parser.add_argument('-rd', '--remote_directory',
+                    action="store",
+                    dest="remote_directory",
+                    help="directory to remote host",
+                    required=True)
 
-# FIX VARIABLES
-if [[ $REMOTE_DIRECTORY != */ ]]
-then
-    echo "** Appending / to REMOTE_DIRECTORY"
-    REMOTE_DIRECTORY=$REMOTE_DIRECTORY/
-fi 
+arguments = parser.parse_args()
 
-# EXECUTE GRS
-for ((i=0;i<=${#GIT_OUTPUT[@]}-1;i++)); do
-    # skip even indexes (files)
-    if [ $(( $i % 2 )) -ne 0 ]
-    then
-        continue
-    fi 
-    # determine what to do with the file
-    if test "${GIT_OUTPUT[${i}]}" == "M"
-    then
-        echo "** Uploading modified file: ${GIT_OUTPUT[${i}+1]}"
-        eval "ssh ${USER}@${HOST} \"mkdir -p ${REMOTE_DIRECTORY}$(dirname ${GIT_OUTPUT[${i}+1]})\""
-        eval "scp ${GIT_OUTPUT[${i}+1]} ${USER}@${HOST}:${REMOTE_DIRECTORY}$(dirname ${GIT_OUTPUT[${i}+1]})"
-        if [[ $ZOS == 1 ]]; then
-        echo "Tagging file as IBM-1047"
-        eval "ssh ${USER}@${HOST} \"chtag -tc IBM-1047 ${REMOTE_DIRECTORY}${GIT_OUTPUT[${i}+1]}\""
-        fi 
-    elif test "${GIT_OUTPUT[${i}]}" == "A"
-    then
-        echo "** Uploading added file: ${GIT_OUTPUT[${i}+1]}"
-        eval "ssh ${USER}@${HOST} \"mkdir -p ${REMOTE_DIRECTORY}$(dirname ${GIT_OUTPUT[${i}+1]})\""
-        eval "scp ${GIT_OUTPUT[${i}+1]} ${USER}@${HOST}:${REMOTE_DIRECTORY}$(dirname ${GIT_OUTPUT[${i}+1]})"
-        if [[ $ZOS == 1 ]]; then
-        echo "Tagging file as IBM-1047"
-        eval "ssh ${USER}@${HOST} \"chtag -tc IBM-1047 ${REMOTE_DIRECTORY}${GIT_OUTPUT[${i}+1]}\""
-        fi 
-    elif test "${GIT_OUTPUT[${i}]}" == "D"
-    then
-        echo "** Removing deleted file: ${GIT_OUTPUT[${i}+1]}"
-        if ssh $1@$2 "[ -f ${REMOTE_DIRECTORY}${GIT_OUTPUT[${i}+1]} ]"
-        then
-            ssh $1@$2 "rm ${REMOTE_DIRECTORY}${GIT_OUTPUT[${i}+1]}"
-        fi
-    fi
-done
 
-exit 0
+def git_get_changed_files():
+    response = subprocess.run(
+        ['git', '--no-pager', 'diff', '--name-status'], stdout=subprocess.PIPE)
+    return response.stdout.decode('utf-8')
+
+
+def git_get_encodings(file):
+    response = subprocess.run(
+        ['git', 'check-attr', '-a', file], stdout=subprocess.PIPE)
+    response = response.stdout.decode('utf-8')
+    file_encoding_lines = response.split("\n")
+    encodings = {}
+    for file_encoding in file_encoding_lines:
+        try:
+            encoding = file_encoding.split(" ")[1].strip(":")
+            value = file_encoding.split(" ")[2]
+            encodings[encoding] = value
+        except Exception as e:
+            pass
+    return encodings
+
+
+def bash_upload_file(user, host, absolute_remote_directory, local_file, remote_file):
+    response = subprocess.run(
+        ['scp', local_file, "%s@%s:%s/%s" %
+            (user, host, absolute_remote_directory, remote_file)]
+    )
+
+
+def bash_convert_file_to_encoding(user, host, absolute_remote_directory, remote_file, encoding):
+    response = subprocess.run(
+        ['ssh', '%s@%s' % (user, host), 'iconv', '-f',
+         "IBM-1047", '-t', encoding, "%s/%s.temp" % (absolute_remote_directory, remote_file), ">", "%s/%s" % (absolute_remote_directory, remote_file)]
+    )
+    response = subprocess.run(
+        ['ssh', '%s@%s' % (user, host), 'chtag', '-tc', encoding, "%s/%s" %
+         (absolute_remote_directory, remote_file)],
+    )
+    response = subprocess.run(
+        ['ssh', '%s@%s' % (user, host), 'rm', "%s/%s.temp" %
+         (absolute_remote_directory, remote_file)],
+    )
+
+
+def bash_remove_file(user, host, absolute_remote_directory, remote_file):
+    response = subprocess.run(
+        ['ssh', '%s@%s' % (user, host), 'rm', "%s/%s" %
+         (absolute_remote_directory, remote_file)],
+    )
+
+
+def bash_tag_file(user, host, absolute_remote_directory, remote_file, encoding):
+    response = subprocess.run(
+        ['ssh', '%s@%s' % (user, host), 'chtag', '-tc', encoding, "%s/%s" %
+         (absolute_remote_directory, remote_file)],
+    )
+
+
+def build_file_dictionary(changed_files):
+    file_dictionary = {}
+    file_list = str(changed_files).split("\n")
+    for file in file_list:
+        try:
+            status = file.split("\t")[0]
+            filename = file.split("\t")[1]
+            encodings = git_get_encodings(filename)
+            file_dictionary[filename] = {
+                "status": status
+            }
+            if 'git-encoding' in encodings:
+                file_dictionary[filename]['git-encoding'] = encodings['git-encoding']
+            if 'zos-working-tree-encoding' in encodings:
+                file_dictionary[filename]['zos-working-tree-encoding'] = encodings['zos-working-tree-encoding']
+        except Exception as e:
+            pass
+    return file_dictionary
+
+
+file_dictionary = build_file_dictionary(git_get_changed_files())
+
+for file_key in file_dictionary:
+    file = file_dictionary[file_key]
+    if file['status'] == 'M' or file['status'] == 'A':
+        absolute_remote_directory = arguments.remote_directory + \
+            "/" + os.path.dirname(file_key)
+        absolute_file_name = os.path.basename(file_key)
+
+        if "zos-working-tree-encoding" in file and file['zos-working-tree-encoding'] != "ibm-1047":
+            bash_upload_file(arguments.user, arguments.host,
+                             absolute_remote_directory, file_key, "%s.temp" % absolute_file_name)
+            print("Detected encoding change for %s, changing encoding to %s" % (
+                file_key, file['zos-working-tree-encoding']))
+            bash_convert_file_to_encoding(
+                arguments.user, arguments.host, absolute_remote_directory, absolute_file_name, file['zos-working-tree-encoding'])
+        else:
+            bash_upload_file(arguments.user, arguments.host,
+                             absolute_remote_directory, file_key, "%s" % absolute_file_name)
+            bash_tag_file(
+                arguments.user, arguments.host, absolute_remote_directory, absolute_file_name, "IBM-1047")
+
+    elif file['status'] == 'D':
+        bash_remove_file(arguments.user, arguments.host,
+                         absolute_remote_directory, file_key, "%s" % absolute_file_name)

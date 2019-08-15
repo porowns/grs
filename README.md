@@ -10,15 +10,17 @@ GRS is a wrapper for secure copy (`scp`) and remove (`rm`). This tool was create
 3. Move `grs` to your bin folder (`cd grs; mv grs ~/bin/`)
 4. Add your `bin` folder to your `.bashrc` or `.profile` path (`export PATH=$PATH:~/bin/`)
 
+# Requirements
+`grs` expects a Python installation at `#!/usr/bin/env python3`
+
 # Usage
 `grs {argument1} {value1} {argument2}...`
 
 Valid Arguments
 ```
 -u|--user (the host user)
--h|--host (the hostname)
--r|--remote (the remote directory)
--z|--zos (z/OS or not, expects 1 or 0)
+-ip|--host (the hostname)
+-rd|--remote_directory (the remote directory)
 ```
 
 Example
