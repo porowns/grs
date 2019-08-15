@@ -1,37 +1,53 @@
 #!/bin/bash
-USER=$1
-HOST=$2
-REMOTE_DIRECTORY=$3
 declare GIT_OUTPUT=($(git --no-pager diff --name-status))
 
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+key="$1"
 
-# TEST COMMAND LINE ARGUMENTS
-if test -z "$1"
-then 
-    echo "** Improper usage. Proper usage: grs {username} {remote} {remote directory}"
-    exit 1
-fi
-
-if test -z "$2"
-then 
-    echo "** Improper usage. Proper usage: grs {username} {remote} {remote directory}"
-    exit 1
-fi
-
-if test -z "$3"
-then 
-    echo "** Improper usage. Proper usage: grs {username} {remote} {remote directory}"
-    exit 1
-fi
+case $key in
+    -u|--user)
+    USER="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -h|--host)
+    HOST="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -r|--remote)
+    REMOTE_DIRECTORY="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -z|--zos)
+    ZOS="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -i|--init)
+    INIT="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    *)    # unknown option
+    POSITIONAL+=("$1") # save it in an array for later
+    shift # past argument
+    ;;
+esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
 
 # TEST REMOTE DIRECTORIES
-if ssh $1@$2 "[ ! -d $REMOTE_DIRECTORY ]"
+if ssh $USER@$HOST "[ ! -d $REMOTE_DIRECTORY ]"
 then
     echo "** Remote directory does not exist: $REMOTE_DIRECTORY"
     exit 1
 fi
 
-if ssh $1@$2 "[ ! -d $REMOTE_DIRECTORY/.git/ ]"
+if ssh $USER@$HOST "[ ! -d $REMOTE_DIRECTORY/.git/ ]"
 then
     echo "** Remote directory is not a git directory: $REMOTE_DIRECTORY"
     exit 1
@@ -55,11 +71,21 @@ for ((i=0;i<=${#GIT_OUTPUT[@]}-1;i++)); do
     if test "${GIT_OUTPUT[${i}]}" == "M"
     then
         echo "** Uploading modified file: ${GIT_OUTPUT[${i}+1]}"
-        eval "scp ${GIT_OUTPUT[${i+1}]} ${USER}@${HOST}:${REMOTE_DIRECTORY}$(dirname ${GIT_OUTPUT[${i+1}]})"
+        eval "ssh ${USER}@${HOST} \"mkdir -p ${REMOTE_DIRECTORY}$(dirname ${GIT_OUTPUT[${i}+1]})\""
+        eval "scp ${GIT_OUTPUT[${i}+1]} ${USER}@${HOST}:${REMOTE_DIRECTORY}$(dirname ${GIT_OUTPUT[${i}+1]})"
+        if [[ $ZOS == 1 ]]; then
+        echo "Tagging file as IBM-1047"
+        eval "ssh ${USER}@${HOST} \"chtag -tc IBM-1047 ${REMOTE_DIRECTORY}${GIT_OUTPUT[${i}+1]}\""
+        fi 
     elif test "${GIT_OUTPUT[${i}]}" == "A"
     then
         echo "** Uploading added file: ${GIT_OUTPUT[${i}+1]}"
-        eval "scp ${${GIT_OUTPUT[${i+1}]}} ${USER}@${HOST}:${REMOTE_DIRECTORY}$(dirname ${GIT_OUTPUT[${i+1}]})"
+        eval "ssh ${USER}@${HOST} \"mkdir -p ${REMOTE_DIRECTORY}$(dirname ${GIT_OUTPUT[${i}+1]})\""
+        eval "scp ${GIT_OUTPUT[${i}+1]} ${USER}@${HOST}:${REMOTE_DIRECTORY}$(dirname ${GIT_OUTPUT[${i}+1]})"
+        if [[ $ZOS == 1 ]]; then
+        echo "Tagging file as IBM-1047"
+        eval "ssh ${USER}@${HOST} \"chtag -tc IBM-1047 ${REMOTE_DIRECTORY}${GIT_OUTPUT[${i}+1]}\""
+        fi 
     elif test "${GIT_OUTPUT[${i}]}" == "D"
     then
         echo "** Removing deleted file: ${GIT_OUTPUT[${i}+1]}"
