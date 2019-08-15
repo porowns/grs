@@ -1,8 +1,5 @@
 # Git Remote Sync (GRS)
-Tool for syncing local changed and deleted Git files with a remote development server. 
-
-GRS is a wrapper for secure copy (`scp`) and remove (`rm`). This tool was created to resolve difficulties while developing on a local machine for z/OS applications.
-
+Git Remote Sync is wrapper around `scp`, `rm`, `iconv`, and `chtag` to sync your Git directory to a remote z/OS directory. It will keep codepages intact, pulling from your `.gitattributes` file.
 
 # Installation
 1. Clone the repository `git clone https://github.com/porowns/grs.git`
