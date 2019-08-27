@@ -1,118 +1,23 @@
 #!/usr/bin/env python3
-import argparse
-import subprocess
 import os
-
-parser = argparse.ArgumentParser(description="Load settings for GRS program")
-
-parser.add_argument('-u', '--user',
-                    action="store",
-                    dest="user",
-                    help="user to remote host",
-                    required=True)
-
-parser.add_argument('-ip', '--host',
-                    action="store",
-                    dest="host",
-                    help="hostname to remote host",
-                    required=True)
-
-parser.add_argument('-rd', '--remote_directory',
-                    action="store",
-                    dest="remote_directory",
-                    help="directory to remote host",
-                    required=True)
+from utilities.git import git_get_changed_files, git_get_untracked_files, git_get_encodings
+from utilities.bash import bash_upload_file, bash_convert_file_to_encoding, bash_remove_file, bash_tag_file
+from utilities.parser import parser
+from utilities.grs import build_file_dictionary, get_files
 
 arguments = parser.parse_args()
+print(get_files())
 
 
-def git_get_changed_files():
-    response = subprocess.run(
-        ['git', '--no-pager', 'diff', '--name-status'], stdout=subprocess.PIPE)
-    return response.stdout.decode('utf-8')
-
-
-def git_get_encodings(file):
-    response = subprocess.run(
-        ['git', 'check-attr', '-a', file], stdout=subprocess.PIPE)
-    response = response.stdout.decode('utf-8')
-    file_encoding_lines = response.split("\n")
-    encodings = {}
-    for file_encoding in file_encoding_lines:
-        try:
-            encoding = file_encoding.split(" ")[1].strip(":")
-            value = file_encoding.split(" ")[2]
-            encodings[encoding] = value
-        except Exception as e:
-            pass
-    return encodings
-
-
-def bash_upload_file(user, host, absolute_remote_directory, local_file, remote_file):
-    response = subprocess.run(
-        ['scp', local_file, "%s@%s:%s/%s" %
-            (user, host, absolute_remote_directory, remote_file)]
-    )
-
-
-def bash_convert_file_to_encoding(user, host, absolute_remote_directory, remote_file, encoding):
-    response = subprocess.run(
-        ['ssh', '%s@%s' % (user, host), 'iconv', '-f',
-         "IBM-1047", '-t', encoding, "%s/%s.temp" % (absolute_remote_directory, remote_file), ">", "%s/%s" % (absolute_remote_directory, remote_file)]
-    )
-    response = subprocess.run(
-        ['ssh', '%s@%s' % (user, host), 'chtag', '-tc', encoding, "%s/%s" %
-         (absolute_remote_directory, remote_file)],
-    )
-    response = subprocess.run(
-        ['ssh', '%s@%s' % (user, host), 'rm', "%s/%s.temp" %
-         (absolute_remote_directory, remote_file)],
-    )
-
-
-def bash_remove_file(user, host, absolute_remote_directory, remote_file):
-    response = subprocess.run(
-        ['ssh', '%s@%s' % (user, host), 'rm', "%s/%s" %
-         (absolute_remote_directory, remote_file)],
-    )
-
-
-def bash_tag_file(user, host, absolute_remote_directory, remote_file, encoding):
-    response = subprocess.run(
-        ['ssh', '%s@%s' % (user, host), 'chtag', '-tc', encoding, "%s/%s" %
-         (absolute_remote_directory, remote_file)],
-    )
-
-
-def build_file_dictionary(changed_files):
-    file_dictionary = {}
-    file_list = str(changed_files).split("\n")
-    for file in file_list:
-        try:
-            status = file.split("\t")[0]
-            filename = file.split("\t")[1]
-            encodings = git_get_encodings(filename)
-            file_dictionary[filename] = {
-                "status": status
-            }
-            if 'git-encoding' in encodings:
-                file_dictionary[filename]['git-encoding'] = encodings['git-encoding']
-            if 'zos-working-tree-encoding' in encodings:
-                file_dictionary[filename]['zos-working-tree-encoding'] = encodings['zos-working-tree-encoding']
-        except Exception as e:
-            pass
-    return file_dictionary
-
-
-file_dictionary = build_file_dictionary(git_get_changed_files())
-
-for file_key in file_dictionary:
-    file = file_dictionary[file_key]
+file_collection = get_files()
+for file_key in file_collection:
+    file = file_collection[file_key]
+    absolute_remote_directory = arguments.remote_directory + \
+        "/" + os.path.dirname(file_key)
+    absolute_file_name = os.path.basename(file_key)
     if file['status'] == 'M' or file['status'] == 'A':
-        absolute_remote_directory = arguments.remote_directory + \
-            "/" + os.path.dirname(file_key)
-        absolute_file_name = os.path.basename(file_key)
-
+        print("[MODIFIED] Uploading new/modified file: %s" %
+              absolute_file_name)
         if "zos-working-tree-encoding" in file and file['zos-working-tree-encoding'] != "ibm-1047":
             bash_upload_file(arguments.user, arguments.host,
                              absolute_remote_directory, file_key, "%s.temp" % absolute_file_name)
@@ -127,5 +32,9 @@ for file_key in file_dictionary:
                 arguments.user, arguments.host, absolute_remote_directory, absolute_file_name, "IBM-1047")
 
     elif file['status'] == 'D':
-        bash_remove_file(arguments.user, arguments.host,
-                         absolute_remote_directory, file_key, "%s" % absolute_file_name)
+        print("[DELETE] Removing deleted file: %s" % absolute_file_name)
+        try:
+            bash_remove_file(arguments.user, arguments.host,
+                             absolute_remote_directory, "%s" % absolute_file_name)
+        except Exception as e:
+            pass
