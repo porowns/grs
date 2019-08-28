@@ -1,12 +1,24 @@
 #!/usr/bin/env python3
 import os
-from utilities.git import git_get_changed_files, git_get_untracked_files, git_get_encodings
+from utilities.git import git_get_changed_files, git_get_untracked_files, git_get_encodings, git_get_new_directories
 from utilities.bash import bash_upload_file, bash_convert_file_to_encoding, bash_remove_file, bash_tag_file
 from utilities.parser import parser
 from utilities.grs import build_file_dictionary, get_files
+from subprocess import Popen
 
 arguments = parser.parse_args()
 processes = []
+
+new_directories = git_get_new_directories()
+new_directory_processes = []
+for directory in new_directories:
+    absolute_remote_directory = arguments.remote_directory + \
+        "/" + directory
+    new_directory_processes.append(Popen(['ssh', '%s@%s' % (arguments.user, arguments.host), 'mkdir',
+                                          '-p', absolute_remote_directory]))
+
+for p in new_directory_processes:
+    p.wait()
 
 file_collection = get_files()
 for file_key in file_collection:
@@ -20,14 +32,14 @@ for file_key in file_collection:
         if "zos-working-tree-encoding" in file and file['zos-working-tree-encoding'] != "ibm-1047":
 
             processes += bash_upload_file(arguments.user, arguments.host,
-                             absolute_remote_directory, file_key, "%s.temp" % absolute_file_name)
+                                          absolute_remote_directory, file_key, "%s.temp" % absolute_file_name)
             print("Detected encoding change for %s, changing encoding to %s" % (
                 file_key, file['zos-working-tree-encoding']))
             processes += bash_convert_file_to_encoding(
                 arguments.user, arguments.host, absolute_remote_directory, absolute_file_name, file['zos-working-tree-encoding'])
         else:
             processes += bash_upload_file(arguments.user, arguments.host,
-                             absolute_remote_directory, file_key, "%s" % absolute_file_name)
+                                          absolute_remote_directory, file_key, "%s" % absolute_file_name)
             processes += bash_tag_file(
                 arguments.user, arguments.host, absolute_remote_directory, absolute_file_name, "IBM-1047")
 
@@ -35,7 +47,7 @@ for file_key in file_collection:
         print("[DELETE] Removing deleted file: %s" % absolute_file_name)
         try:
             processes += bash_remove_file(arguments.user, arguments.host,
-                             absolute_remote_directory, "%s" % absolute_file_name)
+                                          absolute_remote_directory, "%s" % absolute_file_name)
         except Exception as e:
             pass
 

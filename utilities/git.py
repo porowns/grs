@@ -1,4 +1,5 @@
 import subprocess
+import os
 
 
 def git_get_changed_files():
@@ -13,6 +14,18 @@ def git_get_untracked_files():
         stdout=subprocess.PIPE
     )
     return response.stdout.decode('utf-8')
+
+
+def git_get_new_directories():
+    directories = set()
+    response = subprocess.run(
+        ['git', 'ls-files', '--others', '--exclude-standard'],
+        stdout=subprocess.PIPE
+    )
+    response = response.stdout.decode('utf-8')
+    for file in response:
+        directories.add(os.path.dirname(file))
+    return directories
 
 
 def git_get_encodings(file):
