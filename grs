@@ -6,8 +6,7 @@ from utilities.parser import parser
 from utilities.grs import build_file_dictionary, get_files
 
 arguments = parser.parse_args()
-print(get_files())
-
+processes = []
 
 file_collection = get_files()
 for file_key in file_collection:
@@ -19,22 +18,26 @@ for file_key in file_collection:
         print("[MODIFIED] Uploading new/modified file: %s" %
               absolute_file_name)
         if "zos-working-tree-encoding" in file and file['zos-working-tree-encoding'] != "ibm-1047":
-            bash_upload_file(arguments.user, arguments.host,
+
+            processes += bash_upload_file(arguments.user, arguments.host,
                              absolute_remote_directory, file_key, "%s.temp" % absolute_file_name)
             print("Detected encoding change for %s, changing encoding to %s" % (
                 file_key, file['zos-working-tree-encoding']))
-            bash_convert_file_to_encoding(
+            processes += bash_convert_file_to_encoding(
                 arguments.user, arguments.host, absolute_remote_directory, absolute_file_name, file['zos-working-tree-encoding'])
         else:
-            bash_upload_file(arguments.user, arguments.host,
+            processes += bash_upload_file(arguments.user, arguments.host,
                              absolute_remote_directory, file_key, "%s" % absolute_file_name)
-            bash_tag_file(
+            processes += bash_tag_file(
                 arguments.user, arguments.host, absolute_remote_directory, absolute_file_name, "IBM-1047")
 
     elif file['status'] == 'D':
         print("[DELETE] Removing deleted file: %s" % absolute_file_name)
         try:
-            bash_remove_file(arguments.user, arguments.host,
+            processes += bash_remove_file(arguments.user, arguments.host,
                              absolute_remote_directory, "%s" % absolute_file_name)
         except Exception as e:
             pass
+
+for p in processes:
+    p.wait()
