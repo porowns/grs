@@ -22,6 +22,12 @@ for p in new_directory_processes:
 
 file_collection = get_files()
 for file_key in file_collection:
+    if len(processes) >= 4:
+        print("Waiting for processes to finish...")
+        for p in processes:
+            p.wait()
+            processes.remove(p)
+
     file = file_collection[file_key]
     absolute_remote_directory = arguments.remote_directory + \
         "/" + os.path.dirname(file_key)
@@ -33,6 +39,7 @@ for file_key in file_collection:
 
             processes += bash_upload_file(arguments.user, arguments.host,
                                           absolute_remote_directory, file_key, "%s.temp" % absolute_file_name)
+            # TODO: better solution for this 
             print("Detected encoding change for %s, changing encoding to %s" % (
                 file_key, file['zos-working-tree-encoding']))
             processes += bash_convert_file_to_encoding(
