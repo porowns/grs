@@ -22,9 +22,10 @@ def git_get_new_directories():
         ['git', 'ls-files', '--others', '--exclude-standard'],
         stdout=subprocess.PIPE
     )
-    response = response.stdout.decode('utf-8')
+    response = response.stdout.decode('utf-8').split("\n")
     for file in response:
-        directories.add(os.path.dirname(file))
+        if file != "":
+            directories.add(os.path.dirname(file))
     return directories
 
 

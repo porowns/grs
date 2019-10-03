@@ -22,7 +22,7 @@ for p in new_directory_processes:
 
 file_collection = get_files()
 for file_key in file_collection:
-    if len(processes) >= 4:
+    if len(processes) > 4:
         print("Waiting for processes to finish...")
         for p in processes:
             p.wait()
@@ -33,22 +33,14 @@ for file_key in file_collection:
         "/" + os.path.dirname(file_key)
     absolute_file_name = os.path.basename(file_key)
     if file['status'] == 'M' or file['status'] == 'A':
-        print("[MODIFIED] Uploading new/modified file: %s" %
-              absolute_file_name)
+        print("[MODIFIED] Uploading new/modified file: %s" % absolute_file_name)
         if "zos-working-tree-encoding" in file and file['zos-working-tree-encoding'] != "ibm-1047":
 
             processes += bash_upload_file(arguments.user, arguments.host,
                                           absolute_remote_directory, file_key, "%s.temp" % absolute_file_name)
-            # TODO: better solution for this 
-            print("Detected encoding change for %s, changing encoding to %s" % (
-                file_key, file['zos-working-tree-encoding']))
-            processes += bash_convert_file_to_encoding(
-                arguments.user, arguments.host, absolute_remote_directory, absolute_file_name, file['zos-working-tree-encoding'])
         else:
             processes += bash_upload_file(arguments.user, arguments.host,
                                           absolute_remote_directory, file_key, "%s" % absolute_file_name)
-            processes += bash_tag_file(
-                arguments.user, arguments.host, absolute_remote_directory, absolute_file_name, "IBM-1047")
 
     elif file['status'] == 'D':
         print("[DELETE] Removing deleted file: %s" % absolute_file_name)
@@ -60,3 +52,33 @@ for file_key in file_collection:
 
 for p in processes:
     p.wait()
+    processes.remove(p)
+
+# tag files after uploading
+for file_key in file_collection:
+    
+    if len(processes) > 4:
+        print("Waiting for processes to finish...")
+        for p in processes:
+            p.wait()
+            processes.remove(p)
+
+    file = file_collection[file_key]
+    absolute_remote_directory = arguments.remote_directory + \
+        "/" + os.path.dirname(file_key)
+    absolute_file_name = os.path.basename(file_key)
+    print("Adjusting encoding for %s" % absolute_file_name)
+    if file['status'] == 'M' or file['status'] == 'A':
+        if "zos-working-tree-encoding" in file and file['zos-working-tree-encoding'] != "ibm-1047":
+            print("Detected encoding change for %s, changing encoding to %s" % (
+                file_key, file['zos-working-tree-encoding']))
+            processes += bash_convert_file_to_encoding(
+                arguments.user, arguments.host, absolute_remote_directory, absolute_file_name, file['zos-working-tree-encoding'])
+        else:
+            processes += bash_tag_file(
+                arguments.user, arguments.host, absolute_remote_directory, absolute_file_name, "IBM-1047")
+
+
+for p in processes:
+    p.wait()
+    processes.remove(p)
