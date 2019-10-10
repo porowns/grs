@@ -22,7 +22,6 @@ Valid Arguments
 
 Example
 ```
-grs -u porowns -h testserver.com -r /home/porowns/ -z 1
-```
+grs -u porowns -ip testserver.com -rd /home/porowns/grs/
 
-Upon executing this command, `grs` will sync modified files ('M', 'D') with on the remote `testserver.com` in directory `/home/porowns/project`. 
+Upon executing this command, `grs` will sync modified files ('M', 'D') with on the remote `testserver.com` in directory `/home/porowns/grs/`. 
